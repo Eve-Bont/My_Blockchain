@@ -1,18 +1,20 @@
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdio.h>
 
-struct block {
+typedef struct block {
     char*  bid;
     struct block* next;
-};
-struct node {
+} st_block;
+
+typedef struct node {
     int nid;
     struct block* first;
     struct node* next;
-};
+} st_node;
 
 int main() {
-    struct node* blockchain = NULL;
+    st_node* blockchain = NULL;
     char synchronization = 's';
     int nb_node = 0;
     printf("No Backup Found: Starting New Blockchain\n");
@@ -27,7 +29,8 @@ int main() {
             break;
         }
 
-        if(execute_command(command, &blockchain)) {
+        int result = execute_command(command, &blockchain);
+        if (result == 6) {
             printf("nok: command not found\n");
         }
         free(command);
@@ -36,9 +39,9 @@ int main() {
     return 0;
 }
 
-int execute_command(char* command, struct node** blockchain) {
+int execute_command(char* command, st_node** blockchain) {
     if (compare_string(command, "add ", 0, 4)) {
-        return command_add();
+        return command_add(command, blockchain);
     }
     else if (compare_string(command, "rm ", 0, 3)) {
         return command_rm();
@@ -58,21 +61,83 @@ int execute_command(char* command, struct node** blockchain) {
 COMMANDS
 */
 
-int command_add() {
-    if (compare_string(command, "node ", 4, 9)) {
 
-    } if else (compare_string(command, "block ", 4, 10)) {
+//FUNCTIONS TO COMMAND ADD
+
+int command_add(char* command, st_node** blockchain) {
+    if (compare_string(command, "node ", 4, 9) && count_string(command) >= 10) {
+        int existing_node = 0, value_nid = 0;
+        if(found_node(command, blockchain, &existing_node, &valud_nid))
+            return 6;
+        if(existing_node) {
+            printf("this node already exists\n");
+            return 2;
+        }
+        return fill_node(blockchain, value_nid);
+    } else if (compare_string(command, "block ", 4, 10) && count_string(command) >= 11) {
+        int value_bid = 0;
+        for (int i = 10; i < count_string(command); i++) {
+            if(command[i] == ' ')
+                break
+            nb = nb * 10 + (command[i] - '0');
+        }
+        int
+
+
+
+
+
 
     } else {
-        return 1;
+        return 6;
     }
     return 0;
 }
 
+int found_node(char* command, st_node** blockchain, int* existing_node, int* value_nid) {
+    *value_nid = 0;
+    for (int i = 9; i < count_string(command); i++) {
+        if(command[i] < '0' || command[i] > '9')
+            return 6;
+        *value_nid = *value_nid * 10 + (command[i] - '0');
+    }
+    *existing_node = 0;
+    st_node* node = *blockchain;
+
+    while(node != NULL) {
+        if(node->nid == *value_nid)
+            *existing_node = 1;
+        node = node->next;
+    }
+    return 0;
+}
+
+int fill_node(st_node** blockchain, value_nid) {
+    st_node* new_node = malloc(sizeof(st_node));
+    if(new_node == NULL) {
+        printf("nok: no more resources available on the computer\n");
+        return 1;
+    }
+    new_node->nid = value_nid;
+    new_node->first = NULL;
+    new_node->next = NULL;
+    if(*blockchain == NULL)
+        *blockchain = new_node;
+    else {
+        st_node* node = *blockchain;
+        while(node->next != NULL)
+            node = node->next;
+        node->next = new_node;
+    }
+    return 0;
+}
+
+
+
 int command_rm() {
     if (compare_string(command, "node ", 3, 8)) {
 
-    } if else (compare_string(command, "block ", 3, 9)) {
+    } else if (compare_string(command, "block ", 3, 9)) {
 
     } else {
         return 1;
@@ -91,13 +156,13 @@ int command_ls() {
     return 0;
 }
 
-int comand_sync() {
+int command_sync() {
 
     return 0;
 }
 
 /*
-
+FUNCTIONS
 */
 
 char* read_command(void) {
@@ -116,7 +181,7 @@ char* read_command(void) {
 char* fill_new_string(char* string2, int size) {
     char* string1 = malloc(sizeof(char) * (size + 1));
     if(string1 == NULL)
-        return NULL
+        return NULL;
     for(int i = 0; i < size; i++) {
         string1[i] = string2[i];
     }
@@ -128,7 +193,7 @@ int compare_string(char* string1, char* string2, int start, int end) {
     if(end - start != count_string(string2))
         return 0;
     for (int i = start; i < end; i++) {
-        if(string1[start] != string2[i - start]) {
+        if(string1[i] != string2[i - start]) {
             return 0;
         }
     }

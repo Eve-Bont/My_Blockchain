@@ -13,19 +13,25 @@ typedef struct node {
     struct node* next;
 } st_node;
 
+typedef struct t_char_string {
+    int size;
+    char** array;
+} char_string;
+
 int main() {
     st_node* blockchain = NULL;
     char synchronization = 's';
     int nb_node = 0;
     printf("No Backup Found: Starting New Blockchain\n");
+
     while(1) {
         printf("[%c%d]> ", synchronization, nb_node);
-        char* command = read_command();
-        if(command == NULL)
-            break;
+        char_string* command;
+        if (read_command(&command))
+            return 1;
         
-        if(compare_string(command, "quit", 0, 4) && command[4] == '\0') {
-            free(command);
+        if(compare_string(command->array[0], "quit", 0, 4) && command->size == 1) {
+            command_free(command);
             break;
         }
 
@@ -33,23 +39,23 @@ int main() {
         if (result == 6) {
             printf("nok: command not found\n");
         }
-        free(command);
+        command_free(command);
     }
     
     return 0;
 }
 
-int execute_command(char* command, st_node** blockchain) {
-    if (compare_string(command, "add ", 0, 4)) {
+int execute_command(char_string* command, st_node** blockchain) {
+    if (compare_string(command->array[0], "add") && command->size >= 3) {
         return command_add(command, blockchain);
     }
-    else if (compare_string(command, "rm ", 0, 3)) {
+    else if (compare_string(command->array[0], "rm")) {
         return command_rm();
     }
-    else if (compare_string(command, "ls", 0, 2)) {
+    else if (compare_string(command->array[0], "ls")) {
         return command_ls();
     }
-    else if (compare_string(command, "sync", 0, 4) && command[4] == '\0') {
+    else if (compare_string(command->array[0], "sync") && command->size >= 1) {
         return command_sync();
     }
     else {
@@ -64,8 +70,8 @@ COMMANDS
 
 //FUNCTIONS TO COMMAND ADD
 
-int command_add(char* command, st_node** blockchain) {
-    if (compare_string(command, "node ", 4, 9) && count_string(command) >= 10) {
+int command_add(char_string* command, st_node** blockchain) {
+    if (compare_string(command->array[1], "node")) {
         int existing_node = 0, value_nid = 0;
         if(found_node(command, blockchain, &existing_node, &valud_nid))
             return 6;
@@ -74,14 +80,8 @@ int command_add(char* command, st_node** blockchain) {
             return 2;
         }
         return fill_node(blockchain, value_nid);
-    } else if (compare_string(command, "block ", 4, 10) && count_string(command) >= 11) {
-        int value_bid = 0;
-        for (int i = 10; i < count_string(command); i++) {
-            if(command[i] == ' ')
-                break
-            nb = nb * 10 + (command[i] - '0');
-        }
-        int
+    } else if (compare_string(command->array[1], "block")) {
+        
 
 
 
@@ -94,12 +94,16 @@ int command_add(char* command, st_node** blockchain) {
     return 0;
 }
 
-int found_node(char* command, st_node** blockchain, int* existing_node, int* value_nid) {
+int found_node(char_string* command, st_node** blockchain, int* existing_node, int* value_nid) {
     *value_nid = 0;
-    for (int i = 9; i < count_string(command); i++) {
-        if(command[i] < '0' || command[i] > '9')
-            return 6;
-        *value_nid = *value_nid * 10 + (command[i] - '0');
+    for (int i = 2; i < command->size; i++) {
+        char* word_i = command->array[i]
+
+        for (int j = 0; word_i[j] != '\0'; j++) {
+            if(word_i[j] < '0' || word_i[j] > '9')
+                return 6;
+            *value_nid = *value_nid * 10 + (word_i[j] - '0');
+        }
     }
     *existing_node = 0;
     st_node* node = *blockchain;
@@ -165,35 +169,26 @@ int command_sync() {
 FUNCTIONS
 */
 
-char* read_command(void) {
+int read_command(char_string** command) {
     char buffer[100];
-    int reading= read(0, buffer, 100);
-    if (reading <= 0) {
-        return NULL;
-    }
-    int size_malloc = reading;
-    if (buffer[reading - 1] == '\n') {
-        size_malloc = reading - 1;
-    }
-    return fill_new_string(buffer, size_malloc);
+    int reading = read(0, buffer, 100);
+    if (reading <= 0)
+        return 1;
+    
+    if (buffer[reading - 1] == '\n')
+        buffer[reading - 1] = '\0';
+    *command = malloc(sizeof(char_string));
+    if (*command == NULL || my_split(buffer, " ", command))
+        return 1;
+
+    return 0;
 }
 
-char* fill_new_string(char* string2, int size) {
-    char* string1 = malloc(sizeof(char) * (size + 1));
-    if(string1 == NULL)
-        return NULL;
-    for(int i = 0; i < size; i++) {
-        string1[i] = string2[i];
-    }
-    string1[size] = '\0';
-    return string1;
-}
-
-int compare_string(char* string1, char* string2, int start, int end) {
-    if(end - start != count_string(string2))
+int compare_string(char* string1, char* string2) {
+    if(count_string(string1) != count_string(string2))
         return 0;
-    for (int i = start; i < end; i++) {
-        if(string1[i] != string2[i - start]) {
+    for (int i = 0; i < count_string(string1); i++) {
+        if(string1[i] != string2[i]) {
             return 0;
         }
     }
@@ -207,4 +202,92 @@ int count_string(char* name) {
         i++;
     }
     return count;
+}
+
+void command_free(char_string* command) {
+    for (int i = 0; i< command->size; i++) {
+        free(command->array[i]);
+    }
+    free(command->array);
+    free(command->size);
+    free(command);
+}
+
+/*
+FUNCTIONS MY_SPLIT
+*/
+
+int my_split(char* param_1, char* param_2, char_string** result) {
+    *result = malloc(sizeof(char_string));
+    if (*result == NULL)
+        return 1;
+    
+    (*result)->size = count_words(param_1, param_2);
+
+    (*result)->array = malloc(sizeof(char*) * (*result)->size);
+    if ((*result)->array == NULL) {
+        free(result);
+        return 1;
+    }
+    if (malloc_letters(param_1, param_2, *result)) {
+        free((*result)->array);
+        free(*result);
+        return 1;
+    }
+
+    fill_final(param_1, param_2, *result);
+    return 0;
+}
+
+int count_words(char* param_1, char* param_2) {
+    int nb_word = 0;
+    for (int i = 0; param_1[i] != '\0'; i++) {
+        if (param_1[i] != param_2[0] && (param_1[i+1] == param_2[0] || param_1[i+1] == '\0')) {
+            nb_word++;
+        }
+    }
+    return nb_word;
+}
+
+int malloc_letters(char* param_1, char* param_2, char_string* result) {
+    int z = 0;
+    int nb_letter = 0;
+    for (int i = 0; param_1[i] != '\0'; i++) {
+        while (param_1[i] == param_2[0]){
+            i++;
+        }
+        if (param_1[i] == '\0') {
+            break;
+        }
+        nb_letter++;
+        if (param_1[i] != param_2[0] && (param_1[i+1] == param_2[0] || param_1[i+1] == '\0')) {
+            result->array[z] = malloc(sizeof(char) * (nb_letter + 1));
+            if(result->array[z] == NULL) {
+                while(z != 0) {
+                    z--;
+                    free(result->array[z]);
+                }
+                return 1;
+            }
+            nb_letter = 0;
+            z++;
+        }
+    }
+    return 0;
+}
+
+void fill_final(char* param_1, char* param_2, char_string* result) {
+    int j = 0;
+    for (unsigned long word = 0; word < result->size; word++) {
+        while(param_1[j] == param_2[0]) {
+            j++;
+        }
+        unsigned long letter = 0;
+        while (param_1[j] != param_2[0] && param_1[j] != '\0') {
+            result->array[word][letter] = param_1[j];
+            j++;
+            letter++;
+        }
+        result->array[word][letter] = '\0';
+    }
 }

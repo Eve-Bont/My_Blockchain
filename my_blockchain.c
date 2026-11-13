@@ -141,7 +141,7 @@ int add_all_block(char* value_bid, st_node** blockchain) {
 int command_rm(char_string* command, st_node** blockchain) {
     if (command->size < 3)
         return 6;
-    if (compare_string(command->array[1], "node") && command->size >= 3)
+    if (compare_string(command->array[1], "node"))
         return rm_node(command, blockchain);
     if (compare_string(command->array[1], "block") && command->size >= 4)
         return rm_block(/*preparation*/);
@@ -160,7 +160,8 @@ int rm_node(char_string* command, st_node** blockchain) {
     for (int i = 3; i < command->size; i++) {
         if (calc_nid(command->array[i], &value_nid))
             return 6;
-        sup_nodes(value_nid, blockchain);
+        if (found_node(blockchain, value_nid))
+            sup_nodes(value_nid, blockchain);
     }
     return 0;
 }
@@ -176,7 +177,7 @@ int rm_all_node(st_node** blockchain) {
     *blockchain = NULL;
     return 0;
 }
-void sup_nodes(int value_nids, t_node** blockchain) {
+void sup_nodes(int value_nid, st_node** blockchain) {
     st_node* node = *blockchain;
     st_node* n_previous = NULL;
     while (node->nid != value_nid) {

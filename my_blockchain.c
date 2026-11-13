@@ -35,14 +35,9 @@ int main() {
             command_free(command);
             break;
         }
-
-        int result = execute_command(command, &blockchain);
-        if (result == 6) {
-            printf("nok: command not found\n");
-        }
+        return_code(execute_command(command, &blockchain));
         command_free(command);
     }
-    
     return 0;
 }
 
@@ -50,13 +45,14 @@ int execute_command(char_string* command, st_node** blockchain) {
     if (compare_string(command->array[0], "add")) {
         return command_add(command, blockchain);
     }
+    /*en preparation*/
     else if (compare_string(command->array[0], "rm")) {
-        return command_rm();
+        return command_rm(command, blockchain);
     }
     else if (compare_string(command->array[0], "ls")) {
         return command_ls();
     }
-    else if (compare_string(command->array[0], "sync") && command->size >= 1) {
+    else if (compare_string(command->array[0], "sync") && command->size == 1) {
         return command_sync();
     }
     else {
@@ -64,42 +60,149 @@ int execute_command(char_string* command, st_node** blockchain) {
     }
 }
 
+void return_code(int code) {
+    if (code == 1)
+        printf("nok: no more resources available on the computer.\n");
+    if (code == 2)
+        printf("nok: this node already exists.\n");
+    if (code == 3)
+        printf("nok: this block already exists.\n");
+    if (code == 4)
+        printf("nok: node doesn't exist.\n");
+    if (code == 5)
+        printf("nok: block doesn't exist.\n");
+    if (code == 6)
+        printf("nok: command not found.\n");
+}
 /*
 COMMANDS
 */
 
 
 //FUNCTIONS TO COMMAND ADD
-
 int command_add(char_string* command, st_node** blockchain) {
-    if (compare_string(command->array[1], "node") && command->size == 3) {
-        int value_nid = 0;
-        if (calc_nid(command->array[2], &value_nid) == 6)
-            return 6;
-        if (found_node(blockchain, value_nid)) {
-            printf("nok: this node already exists\n");
-            return 2;
-        }
-        return fill_node(blockchain, value_nid);
-    } else if (compare_string(command->array[1], "block") && command->size >= 3) {
-        char* value_bid = command->array[2];
-        for (int i = 3; i < command->size; i++) {
-            int value_nid = 0;
-            if (calc_nid(command->array[i], &value_nid) == 6)
-                return 6;
-            if (!found_node(blockchain, value_nid)) {
-                printf("nok: node doesn't exists\n");
-                return 4;
-            }
-            if (found_block(blockchain, value_nid, value_bid)) {
-                printf("this block already exists");
-                return 3;
-            }
-            return fill_block(blockchain, value_nid, value_bid);
-        }
-    }
+    if (command->size < 3)
+        return 6;
+    if (compare_string(command->array[1], "node") && command->size == 3)
+        return add_node(command->array[2], blockchain);
+    if (compare_string(command->array[1], "block") && command->size >= 4)
+        return add_block(command, blockchain);
     return 6;
 }
+int add_node(char* command_nid, st_node** blockchain) {
+    int value_nid = 0;
+    if (calc_nid(command_nid, &value_nid))
+        return 6;
+    if (found_node(blockchain, value_nid))
+        return 2;
+    return fill_node(blockchain, value_nid);
+}
+int add_block(char_string* command, st_node** blockchain) {
+    char* value_bid = command->array[2];
+    if (command->size == 4 && compare_string(command->array[3], "*"))
+        return add_all_block(value_bid, blockchain);
+    for (int i = 3; i < command->size; i++) {
+        int value_nid = 0;
+        if (calc_nid(command->array[i], &value_nid))
+            return 6;
+        if (!found_node(blockchain, value_nid))
+            return 4;
+        if (found_block(blockchain, value_nid, value_bid))
+            return 3;
+    }
+    for (int i = 3; i < command->size; i++) {
+        int value_nid = 0;
+        if (calc_nid(command->array[i], &value_nid))
+            return 6;
+        if (fill_block(blockchain, value_nid, value_bid))
+            return 1;
+    }
+    return 0;
+}
+int add_all_block(char* value_bid, st_node** blockchain) {
+    st_node* node = *blockchain;
+    if (node == NULL)
+        return 4;
+    while (node != NULL) {
+        if (found_block(blockchain, node->nid, value_bid))
+            return 3;
+        node = node->next;
+    }
+    node = *blockchain;
+    while (node != NULL) {
+        if (fill_block(blockchain, node->nid, value_bid))
+            return 1;
+        node = node->next;
+    }
+    return 0;
+}
+
+//FUNCTIONS TO COMMAND RM
+int command_rm(char_string* command, st_node** blockchain) {
+    if (command->size < 3)
+        return 6;
+    if (compare_string(command->array[1], "node") && command->size >= 3)
+        return rm_node(command, blockchain);
+    if (compare_string(command->array[1], "block") && command->size >= 4)
+        return rm_block(/*preparation*/);
+    return 6;
+}
+int rm_node(char_string* command, st_node** blockchain) {
+    int value_nid;
+    if (compare_string(command->array[2], "*") && command->size == 3)
+        return rm_all_node(blockchain);
+    for (int i = 3; i < command->size; i++) {
+        if (calc_nid(command->array[i], &value_nid))
+            return 6;
+        if (!found_node(blockchain, value_nid))
+            return 4;
+    }
+    for (int i = 3; i < command->size; i++) {
+        if (calc_nid(command->array[i], &value_nid))
+            return 6;
+        sup_nodes(value_nid, blockchain);
+    }
+    return 0;
+}
+int rm_all_node(st_node** blockchain) {
+    st_node* node = *blockchain;
+    while(node != NULL) {
+        st_node* n_next = node->next;
+        if (node->first != NULL)
+            sup_blocks(node->first);
+        free(node);
+        node = n_next;
+    }
+    *blockchain = NULL;
+    return 0;
+}
+void sup_nodes(int value_nids, t_node** blockchain) {
+    st_node* node = *blockchain;
+    st_node* n_previous = NULL;
+    while (node->nid != value_nid) {
+        n_previous = node;
+        node = node->next;
+    }
+    if (n_previous == NULL)
+        *blockchain = node->next;
+    else
+        n_previous->next = node->next;
+
+    if (node->first != NULL)
+        sup_blocks(node->first);
+    free(node);
+}
+void sup_blocks(st_block* first) {
+    st_block* block = first;
+    while (block != NULL) {
+        st_block* b_next = block->next;
+        free(block->bid);
+        free(block);
+        block = b_next;
+    }
+}
+
+
 
 int calc_nid(char* command_nid, int* value_nid) {
     *value_nid = 0;
@@ -124,13 +227,11 @@ int found_node(st_node** blockchain, int value_nid) {
 
 int found_block(st_node** blockchain, int value_nid, char* value_bid) {
     st_node* node = *blockchain;
-    while (node->nid != value_nid) {
+    while (node->nid != value_nid)
         node = node->next;
-    }
-
     st_block* block = node->first;
     while (block != NULL) {
-        if (compare_string(block->bid; value_bid))
+        if (compare_string(block->bid, value_bid))
             return 1;
         block = block->next;
     }
@@ -160,46 +261,46 @@ int fill_node(st_node** blockchain, value_nid) {
 int fill_block(st_node** blockchain, int value_nid, char* value_bid) {
     st_block* new_block = malloc(sizeof(st_block));
     if (new_block == NULL) {
-        printf("nok: no more resources available on the computer\n");
         return 1;
     }
-    new_block->bid = value_bid;
+    new_block->bid = malloc(sizeof(char) * (count_string(value_bid) + 1));
+    if (new_block->bid == NULL) {
+        free(new_block);
+        return 1;
+    }
+    fill_bid(value_bid, new_block->bid);
     new_block->next = NULL;
 
     st_node* node = *blockchain;
     while(node->nid != value_nid)
         node = node->next;
-    if (node->first == NULL)
-        node->first == new_node;
+    if (node->first == NULL) {
+        node->first = new_block;
+        return 0;
+    }
+    st_block* block = node->first;
     while(block->next != NULL)
         block = block->next;
     block->next = new_block;
     return 0;
 }
 
-
-
-
-int command_rm() {
-    if (compare_string(command, "node ", 3, 8)) {
-
-    } else if (compare_string(command, "block ", 3, 9)) {
-
-    } else {
-        return 1;
-    }
-    return 0;
+void fill_bid(char* value_bid, char* bid) {
+    for (int i = 0; value_bid[i] != '\0'; i++)
+        bid[i] = value_bid[i];
+    bid[count_string(value_bid)] = '\0';
 }
 
+
+
+/*en preparation*/
 int command_ls() {
-    if(compare_string(command, " -l", 2, 5) && command[5] == '\0') {
+    if(command->size == 2 && compare_string(command->array[1], "-l") ) {
 
-    } else if (command[2] == '\0') {
+    } else if (command->size == 1) {
 
-    } else {
-        return 1;
     }
-    return 0;
+    return 6;
 }
 
 int command_sync() {

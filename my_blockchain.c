@@ -27,6 +27,9 @@ int main() {
     while(1) {
         printf("[%c%d]> ", synchronization, nb_node);
         char_string* command;
+        if (read_command == -1) {
+            return rm_all_node(&blockchain);
+        }
         if (read_command(&command)) {
             printf("nok: no more resources available on the omputer");
             return 1;
@@ -41,23 +44,57 @@ int main() {
     return 0;
 }
 
+int backup_blockchain(st_node* blockchain, int nb_node, char synchronization) {
+    int fd = open(".my_blockchain_backup", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1)
+        return 1;
+    char* 
+    if (write_all(fd, &synchronization, 1) || write_all(fd, buffer, count_int(nb_node)) || write_all(fd, "\n", 1)) {
+        close(fd);
+        return 1;
+    }
+
+    st_node* node = blockchain;
+    while (node != NULL) {
+        //
+        if (write_all(fd, buffer, count_int(node->nid)) || write_all(fd, " ", 1)) {
+            close(fd);
+            return 1;
+        }
+        st_block* block = node->first;
+        while (block != NULL) {
+            if (write_all(fd, block->bid, count_string(block->bid)) || write_all(fd, " ", 1)) {
+                close(fd);
+                return 1;
+            }
+            block = block->next;
+        }
+        if (write_all(fd, "\n", 1)) {
+            close(fd);
+            return 1;
+        }
+        node = node->next;
+    }
+    if (close(fd) == -1)
+        return 1;
+    return 0;
+}
+
 int execute_command(char_string* command, st_node** blockchain) {
     if (compare_string(command->array[0], "add")) {
         return command_add(command, blockchain);
     }
     /*en preparation*/
-    else if (compare_string(command->array[0], "rm")) {
+    if (compare_string(command->array[0], "rm")) {
         return command_rm(command, blockchain);
     }
-    else if (compare_string(command->array[0], "ls")) {
+    if (compare_string(command->array[0], "ls")) {
         return command_ls();
     }
-    else if (compare_string(command->array[0], "sync") && command->size == 1) {
+    if (compare_string(command->array[0], "sync") && command->size == 1) {
         return command_sync();
     }
-    else {
-        return 1;
-    }
+    return 6;
 }
 
 void return_code(int code) {
@@ -239,12 +276,10 @@ int found_block(st_node** blockchain, int value_nid, char* value_bid) {
     return 0;
 }
 
-int fill_node(st_node** blockchain, value_nid) {
+int fill_node(st_node** blockchain, int value_nid) {
     st_node* new_node = malloc(sizeof(st_node));
-    if(new_node == NULL) {
-        printf("nok: no more resources available on the computer\n");
+    if(new_node == NULL)
         return 1;
-    }
     new_node->nid = value_nid;
     new_node->first = NULL;
     new_node->next = NULL;
@@ -316,7 +351,9 @@ FUNCTIONS
 int read_command(char_string** command) {
     char buffer[100];
     int reading = read(0, buffer, 100);
-    if (reading <= 0)
+    if (reading == 0)
+        return -1;
+    if (reading < 0)
         return 1;
     if (buffer[reading - 1] == '\n')
         buffer[reading - 1] = '\0';
@@ -345,12 +382,35 @@ int count_string(char* name) {
     return count;
 }
 
+int count_int(int number) {
+    int count = 0;
+    while (number != 0){
+        number = number / 10;
+        count++;
+    }
+    return count;
+}
+void int_to_char(int number) {
+    
+}
 void command_free(char_string* command) {
     for (int i = 0; i< command->size; i++) {
         free(command->array[i]);
     }
     free(command->array);
     free(command);
+}
+
+int write_all(int descriptor, char* buffer, size_t size) {
+    size_t total = 0;
+    while (total < size) {
+        ssize_t written = write(descriptor, buffer + total, size - total);
+        if (written <= 0) {
+            return 1;
+        }
+        total += written;
+    }
+    return 0;
 }
 
 /*

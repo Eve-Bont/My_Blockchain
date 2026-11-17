@@ -27,10 +27,11 @@ int main() {
     while(1) {
         printf("[%c%d]> ", synchronization, nb_node);
         char_string* command;
-        if (read_command == -1) {
+        int result_com = read_command(&command);
+        if (result_com == -1) {
             return rm_all_node(&blockchain);
         }
-        if (read_command(&command)) {
+        if (result_com != 0) {
             printf("nok: no more resources available on the omputer");
             return 1;
         }
@@ -48,7 +49,8 @@ int backup_blockchain(st_node* blockchain, int nb_node, char synchronization) {
     int fd = open(".my_blockchain_backup", O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd == -1)
         return 1;
-    char* 
+    char buffer[100];
+    int_to_char(nb_node, buffer);
     if (write_all(fd, &synchronization, 1) || write_all(fd, buffer, count_int(nb_node)) || write_all(fd, "\n", 1)) {
         close(fd);
         return 1;
@@ -56,8 +58,9 @@ int backup_blockchain(st_node* blockchain, int nb_node, char synchronization) {
 
     st_node* node = blockchain;
     while (node != NULL) {
-        //
-        if (write_all(fd, buffer, count_int(node->nid)) || write_all(fd, " ", 1)) {
+        char buffer1[100];
+        int_to_char(node->nid, buffer1);
+        if (write_all(fd, buffer1, count_int(node->nid)) || write_all(fd, " ", 1)) {
             close(fd);
             return 1;
         }
@@ -384,15 +387,35 @@ int count_string(char* name) {
 
 int count_int(int number) {
     int count = 0;
-    while (number != 0){
+    if (number == 0)
+        return 1;
+    while (number != 0) {
         number = number / 10;
         count++;
     }
     return count;
 }
-void int_to_char(int number) {
-    
+
+void int_to_char(int number, char* string) {
+    int size = count_int(number);
+    if (number == 0) {
+        string[0] = '0';
+        string[1] = '\0';
+        return;
+    }
+    int tab[size];
+    for (int i = 0; number != 0; i++) {
+        tab[i] = number % 10;
+        number = number / 10;
+    }
+    int j = 0;
+    for (int i = size - 1 ; i >= 0; i--) {
+        string[j] = tab[i] + '0';
+        j++;
+    }
+    string[size] = '\0';
 }
+
 void command_free(char_string* command) {
     for (int i = 0; i< command->size; i++) {
         free(command->array[i]);

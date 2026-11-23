@@ -1,6 +1,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <fcntl.h>
+
+int NODE = 0;
+char SYNC = 's';
 
 typedef struct block {
     char*  bid;
@@ -20,12 +24,10 @@ typedef struct t_char_string {
 
 int main() {
     st_node* blockchain = NULL;
-    char synchronization = 's';
-    int nb_node = 0;
     printf("No Backup Found: Starting New Blockchain\n");
 
     while(1) {
-        printf("[%c%d]> ", synchronization, nb_node);
+        printf("[%c%d]> ", SYNC, NODE);
         char_string* command;
         int result_com = read_command(&command);
         if (result_com == -1) {
@@ -37,21 +39,22 @@ int main() {
         }
         if(compare_string(command->array[0], "quit") && command->size == 1) {
             command_free(command);
-            break;
+            return backup_blockchain(blockchain);
         }
         return_code(execute_command(command, &blockchain));
+        SYNC = check_sync(blockchain);
         command_free(command);
     }
     return 0;
 }
 
-int backup_blockchain(st_node* blockchain, int nb_node, char synchronization) {
+int backup_blockchain(st_node* blockchain) {
     int fd = open(".my_blockchain_backup", O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd == -1)
         return 1;
     char buffer[100];
-    int_to_char(nb_node, buffer);
-    if (write_all(fd, &synchronization, 1) || write_all(fd, buffer, count_int(nb_node)) || write_all(fd, "\n", 1)) {
+    int_to_char(NODE, buffer);
+    if (write_all(fd, SYNC, 1) || write_all(fd, buffer, count_int(NODE)) || write_all(fd, "\n", 1)) {
         close(fd);
         return 1;
     }
@@ -82,6 +85,17 @@ int backup_blockchain(st_node* blockchain, int nb_node, char synchronization) {
         return 1;
     return 0;
 }
+int recup_blockchain(".my_blockchain_backup", st_node* blockchain) {
+    int fd = open(".my_blockchain_backup", O_RDONLY);
+    if (fd == -1)
+        return 1;
+    
+
+
+
+    close(fd);
+    return 0;
+}
 
 int execute_command(char_string* command, st_node** blockchain) {
     if (compare_string(command->array[0], "add")) {
@@ -100,6 +114,11 @@ int execute_command(char_string* command, st_node** blockchain) {
     return 6;
 }
 
+/*struct error {
+    int code;
+    char* message;
+}*/
+
 void return_code(int code) {
     if (code == 1)
         printf("nok: no more resources available on the computer.\n");
@@ -114,6 +133,7 @@ void return_code(int code) {
     if (code == 6)
         printf("nok: command not found.\n");
 }
+
 /*
 COMMANDS
 */
@@ -215,6 +235,7 @@ int rm_all_node(st_node** blockchain) {
         node = n_next;
     }
     *blockchain = NULL;
+    NODE = 0;
     return 0;
 }
 void sup_nodes(int value_nid, st_node** blockchain) {
@@ -232,6 +253,7 @@ void sup_nodes(int value_nid, st_node** blockchain) {
     if (node->first != NULL)
         sup_blocks(node->first);
     free(node);
+    NODE--;
 }
 void sup_blocks(st_block* first) {
     st_block* block = first;
@@ -294,6 +316,7 @@ int fill_node(st_node** blockchain, int value_nid) {
             node = node->next;
         node->next = new_node;
     }
+    NODE++;
     return 0;
 }
 
@@ -330,6 +353,31 @@ void fill_bid(char* value_bid, char* bid) {
     bid[count_string(value_bid)] = '\0';
 }
 
+char check_sync(st_node* blockchain) {
+    st_node* reference = blockchain;
+
+    if (reference == NULL) {
+        return 's';
+    }
+
+    st_node* node = reference->next;
+    while (node != NULL) {
+        st_block* block1 = reference->first;
+        st_block* block2 = node->first;
+
+        while(block1 != NULL && block2 != NULL) {
+            if (!compare_string(block1->bid, block2->bid)) {
+                return '-';
+            }
+            block1 = block1->next;
+            block2 = block2->next;
+        }
+        if (block1 != NULL || block2 != NULL)
+            return '-';
+        node = node->next;
+    }
+    return 's';
+}
 
 
 /*en preparation*/

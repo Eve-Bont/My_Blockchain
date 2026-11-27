@@ -65,6 +65,7 @@ int restore_blockchain(st_node** blockchain) {
     if (restore_sync(fd) || restore_nb_node(fd, &saved_nodes) || restore_nodes(fd, saved_nodes, blockchain) || NODE != saved_nodes) {
         close(fd);
         rm_all_node(blockchain);
+        SYNC = 's';
         return 1;
     }
     close(fd);
@@ -73,7 +74,7 @@ int restore_blockchain(st_node** blockchain) {
 
 int restore_sync(int fd) {
     char buffer;
-    if (read_char(fd, &buffer))
+    if (read(fd, &buffer, 1) != 1)
         return 1;
     if (buffer != 's' && buffer != '-')
         return 1;
@@ -84,7 +85,7 @@ int restore_sync(int fd) {
 int restore_nb_node(int fd, int* saved_nodes) {
     char buffer;
     NODE = 0;
-    if (read_char(fd, &buffer)) {
+    if (read(fd, &buffer, 1) != 1) {
         return 1;
     }
     while (buffer != '\n') {
@@ -92,7 +93,7 @@ int restore_nb_node(int fd, int* saved_nodes) {
             return 1;
         }
         *saved_nodes = *saved_nodes * 10 + (buffer - '0');
-        if (read_char(fd, &buffer)) {
+        if (read(fd, &buffer, 1) != 1) {
             return 1;
         }
     }
@@ -101,27 +102,29 @@ int restore_nb_node(int fd, int* saved_nodes) {
 
 int restore_nodes(int fd, int saved_nodes, st_node** blockchain) {
     for (int i = 0; i < saved_nodes; i++) {
-        // Lecture du NID
         int nid;
         if (restore_nid(fd, &nid, blockchain) || restore_blocks(fd, nid, blockchain))
             return 1;
     }
+    char buffer;
+    if (read(fd, &buffer, 1) != 0)
+        return 1;
     return 0;
 }
 
 int restore_nid(int fd, int* nid, st_node** blockchain) {
     char buffer;
-    if (read_char(fd, &buffer))
+    if (read(fd, &buffer, 1) != 1)
             return 1;
     *nid = 0;
     while (buffer != ' ') {
         if (buffer < '0' || buffer > '9')
             return 1;
         *nid = *nid * 10 + (buffer - '0');
-        if (read_char(fd, &buffer))
+        if (read(fd, &buffer, 1) != 1)
             return 1;
     }
-    if (fill_node(blockchain, *nid))
+    if (found_node(blockchain, *nid) || fill_node(blockchain, *nid))
         return 1;
     return 0;
 }
@@ -129,7 +132,7 @@ int restore_nid(int fd, int* nid, st_node** blockchain) {
 int restore_blocks(int fd, int nid, st_node** blockchain) {
     char buffer;
     while (1) {
-        if (read_char(fd, &buffer))
+        if (read(fd, &buffer, 1) != 1)
             return 1;
         if (buffer == '\n')
             break;
@@ -151,7 +154,7 @@ int restore_bid(int fd, char* buffer, int nid, st_node** blockchain) {
             return 1;
         bid[i] = *buffer;
         i++;
-        if (read_char(fd, buffer))
+        if (read(fd, buffer, 1) != 1)
             return 1;
     }
     bid[i] = '\0';

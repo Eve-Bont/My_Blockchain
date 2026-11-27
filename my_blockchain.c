@@ -45,7 +45,14 @@ int main() {
             command_free(command);
             return backup_blockchain(blockchain);
         }
-        return_code(execute_command(command, &blockchain));
+        int result = execute_command(command, &blockchain);
+        if (result == 1) {
+            printf("nok: no more resources available on the computer.\n");
+            command_free(command);
+            rm_all_node(&blockchain);
+            return 1;
+        }
+        return_code(result);
 
         SYNC = check_sync(blockchain);
         command_free(command);
@@ -76,10 +83,10 @@ int execute_command(char_string* command, st_node** blockchain) {
         return command_rm(command, blockchain);
     }
     if (compare_string(command->array[0], "ls")) {
-        return command_ls();
+        return command_ls(command, blockchain);
     }
-    if (compare_string(command->array[0], "sync") && command->size == 1) {
-        return command_sync();
+    if (compare_string(command->array[0], "sync")) {
+        return command_sync(command, blockchain);
     }
     return 6;
 }
@@ -94,9 +101,7 @@ void command_free(char_string* command) {
 
 void return_code(int code) {
     if (code == 0)
-        printf("OK\n")
-    if (code == 1)
-        printf("nok: no more resources available on the computer.\n");
+        printf("OK\n");
     if (code == 2)
         printf("nok: this node already exists.\n");
     if (code == 3)

@@ -26,6 +26,8 @@ int main() {
     st_node* blockchain = NULL;
     if (restore_blockchain(&blockchain))
         printf("No Valid Backup Found: Starting New Blockchain\n");
+    else 
+        printf("Restoring From Backup\n");
 
     while(1) {
         printf("[%c%d]> ", SYNC, NODE);
@@ -35,173 +37,35 @@ int main() {
             return rm_all_node(&blockchain);
         }
         if (result_com != 0) {
-            printf("nok: no more resources available on the computer");
+            printf("nok: error reading\n");
             return 1;
         }
         if(compare_string(command->array[0], "quit") && command->size == 1) {
+            printf("Backing up blockchain...\n");
             command_free(command);
             return backup_blockchain(blockchain);
         }
         return_code(execute_command(command, &blockchain));
+
         SYNC = check_sync(blockchain);
         command_free(command);
     }
     return 0;
 }
 
-/*
-BACKUP
-*/
-
-int backup_base(int fd) {
+int read_command(char_string** command) {
     char buffer[100];
-    int_to_char(NODE, buffer);
-    if (write_all(fd, &SYNC, 1) || write_all(fd, buffer, count_int(NODE)) || write_all(fd, "\n", 1)) {
+    int reading = read(0, buffer, 100);
+    if (reading == 0)
+        return -1;
+    if (reading < 0)
         return 1;
-    }
-    return 0;
-}
-int backup_blocks(int fd, st_block* block) {
-    while (block != NULL) {
-        if (write_all(fd, block->bid, count_string(block->bid)) || write_all(fd, " ", 1)) {
-            return 1;
-        }
-        block = block->next;
-    }
-    if (write_all(fd, "\n", 1)) {
-        return 1;
-    }
-    return 0;
-}
-int backup_nodes(int fd, st_node* blockchain) {
-    st_node* node = blockchain;
-    while (node != NULL) {
-        char buffer[100];
-        int_to_char(node->nid, buffer);
-        if (write_all(fd, buffer, count_int(node->nid)) || write_all(fd, " ", 1)) {
-            return 1;
-        }
-        st_block* block = node->first;
-        if (backup_blocks(fd, block))
-            return 1;
-        node = node->next;
-    }
-    return 0;
-}
-int backup_blockchain(st_node* blockchain) {
-    int fd = open(".my_blockchain_backup", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd == -1)
-        return 1;
-    if (backup_base(fd) || backup_nodes(fd, blockchain)) {
-        close(fd);
-        return 1;
-    }
-    close(fd);
-    return 0;
-}
-
-/*
-RESTAURATION
-*/
-
-int restore_sync(int fd) {
-    char buffer;
-    if (read_char(fd, &buffer))
-        return 1;
-    if (buffer != 's' && buffer != '-')
-        return 1;
-    SYNC = buffer;
-    return 0;
-}
-int restore_nb_node(int fd, int* saved_nodes) {
-    char buffer;
-    NODE = 0;
-    if (read_char(fd, &buffer)) {
-        return 1;
-    }
-    while (buffer != '\n') {
-        if (buffer < '0' || buffer > '9') {
-            return 1;
-        }
-        *saved_nodes = *saved_nodes * 10 + (buffer - '0');
-        if (read_char(fd, &buffer)) {
-            return 1;
-        }
-    }
-    return 0;
-}
-int restore_nid(int fd, int* nid, st_node** blockchain) {
-    char buffer;
-    if (read_char(fd, &buffer))
-            return 1;
-    *nid = 0;
-    while (buffer != ' ') {
-        if (buffer < '0' || buffer > '9')
-            return 1;
-        *nid = *nid * 10 + (buffer - '0');
-        if (read_char(fd, &buffer))
-            return 1;
-    }
-    if (fill_node(blockchain, *nid))
+    if (buffer[reading - 1] == '\n')
+        buffer[reading - 1] = '\0';
+    if (my_split(buffer, " ", command))
         return 1;
     return 0;
 }
-int restore_bid(int fd, char* buffer, int nid, st_node** blockchain) {
-    char bid[1000];
-    int i = 0;
-    while (*buffer != ' ' && *buffer != '\n') {
-        if (i >= 999)
-            return 1;
-        bid[i] = *buffer;
-        i++;
-        if (read_char(fd, buffer))
-            return 1;
-    }
-    bid[i] = '\0';
-    if (fill_block(blockchain, nid, bid))
-        return 1;
-    return 0;
-}
-int restore_blocks(int fd, int nid, st_node** blockchain) {
-    char buffer;
-    while (1) {
-        if (read_char(fd, &buffer))
-            return 1;
-        if (buffer == '\n')
-            break;
-        if (buffer == ' ')
-            continue;
-        if (restore_bid(fd, &buffer, nid, blockchain))
-            return 1;
-        if (buffer == '\n')
-            break;
-    }
-    return 0;
-}
-int restore_nodes(int fd, int saved_nodes, st_node** blockchain) {
-    for (int i = 0; i < saved_nodes; i++) {
-        // Lecture du NID
-        int nid;
-        if (restore_nid(fd, &nid, blockchain) || restore_blocks(fd, nid, blockchain))
-            return 1;
-    }
-    return 0;
-}
-int restore_blockchain(st_node** blockchain) {
-    int fd = open(".my_blockchain_backup", O_RDONLY);
-    if (fd == -1)
-        return 1;
-    int saved_nodes = 0;
-    if (restore_sync(fd) || restore_nb_node(fd, &saved_nodes) || restore_nodes(fd, saved_nodes, blockchain) || NODE != saved_nodes) {
-        close(fd);
-        rm_all_node(blockchain);
-        return 1;
-    }
-    close(fd);
-    return 0;
-}
-
-
 
 int execute_command(char_string* command, st_node** blockchain) {
     if (compare_string(command->array[0], "add")) {
@@ -220,7 +84,17 @@ int execute_command(char_string* command, st_node** blockchain) {
     return 6;
 }
 
+void command_free(char_string* command) {
+    for (int i = 0; i< command->size; i++) {
+        free(command->array[i]);
+    }
+    free(command->array);
+    free(command);
+}
+
 void return_code(int code) {
+    if (code == 0)
+        printf("OK\n")
     if (code == 1)
         printf("nok: no more resources available on the computer.\n");
     if (code == 2)
@@ -235,284 +109,15 @@ void return_code(int code) {
         printf("nok: command not found.\n");
 }
 
-/*
-COMMANDS
-*/
-
-
-//FUNCTIONS TO COMMAND ADD
-int command_add(char_string* command, st_node** blockchain) {
-    if (command->size < 3)
-        return 6;
-    if (compare_string(command->array[1], "node") && command->size == 3)
-        return add_node(command->array[2], blockchain);
-    if (compare_string(command->array[1], "block") && command->size >= 4)
-        return add_block(command, blockchain);
-    return 6;
-}
-int add_node(char* command_nid, st_node** blockchain) {
-    int value_nid = 0;
-    if (calc_nid(command_nid, &value_nid))
-        return 6;
-    if (found_node(blockchain, value_nid))
-        return 2;
-    return fill_node(blockchain, value_nid);
-}
-int add_block(char_string* command, st_node** blockchain) {
-    char* value_bid = command->array[2];
-    if (command->size == 4 && compare_string(command->array[3], "*"))
-        return add_all_block(value_bid, blockchain);
-    for (int i = 3; i < command->size; i++) {
-        int value_nid = 0;
-        if (calc_nid(command->array[i], &value_nid))
-            return 6;
-        if (!found_node(blockchain, value_nid))
-            return 4;
-        if (found_block(blockchain, value_nid, value_bid))
-            return 3;
-    }
-    for (int i = 3; i < command->size; i++) {
-        int value_nid = 0;
-        if (calc_nid(command->array[i], &value_nid))
-            return 6;
-        if (fill_block(blockchain, value_nid, value_bid))
-            return 1;
-    }
-    return 0;
-}
-int add_all_block(char* value_bid, st_node** blockchain) {
-    st_node* node = *blockchain;
-    if (node == NULL)
-        return 4;
-    while (node != NULL) {
-        if (found_block(blockchain, node->nid, value_bid))
-            return 3;
-        node = node->next;
-    }
-    node = *blockchain;
-    while (node != NULL) {
-        if (fill_block(blockchain, node->nid, value_bid))
-            return 1;
-        node = node->next;
-    }
-    return 0;
-}
-
-//FUNCTIONS TO COMMAND RM
-int command_rm(char_string* command, st_node** blockchain) {
-    if (command->size < 3)
-        return 6;
-    if (compare_string(command->array[1], "node"))
-        return rm_node(command, blockchain);
-    if (compare_string(command->array[1], "block") && command->size >= 4)
-        return rm_block(/*preparation*/);
-    return 6;
-}
-int rm_node(char_string* command, st_node** blockchain) {
-    int value_nid;
-    if (compare_string(command->array[2], "*") && command->size == 3)
-        return rm_all_node(blockchain);
-    for (int i = 3; i < command->size; i++) {
-        if (calc_nid(command->array[i], &value_nid))
-            return 6;
-        if (!found_node(blockchain, value_nid))
-            return 4;
-    }
-    for (int i = 3; i < command->size; i++) {
-        if (calc_nid(command->array[i], &value_nid))
-            return 6;
-        if (found_node(blockchain, value_nid))
-            sup_nodes(value_nid, blockchain);
-    }
-    return 0;
-}
-int rm_all_node(st_node** blockchain) {
-    st_node* node = *blockchain;
-    while(node != NULL) {
-        st_node* n_next = node->next;
-        if (node->first != NULL)
-            sup_blocks(node->first);
-        free(node);
-        node = n_next;
-    }
-    *blockchain = NULL;
-    NODE = 0;
-    return 0;
-}
-void sup_nodes(int value_nid, st_node** blockchain) {
-    st_node* node = *blockchain;
-    st_node* n_previous = NULL;
-    while (node->nid != value_nid) {
-        n_previous = node;
-        node = node->next;
-    }
-    if (n_previous == NULL)
-        *blockchain = node->next;
-    else
-        n_previous->next = node->next;
-
-    if (node->first != NULL)
-        sup_blocks(node->first);
-    free(node);
-    NODE--;
-}
-void sup_blocks(st_block* first) {
-    st_block* block = first;
-    while (block != NULL) {
-        st_block* b_next = block->next;
-        free(block->bid);
-        free(block);
-        block = b_next;
-    }
-}
 
 
 
-int calc_nid(char* command_nid, int* value_nid) {
-    *value_nid = 0;
-    for (int i = 0; command_nid[i] != '\0'; i++) {
-        if(command_nid[i] < '0' || command_nid[i] > '9')
-            return 6;
-        *value_nid = *value_nid * 10 + (command_nid[i] - '0');
-    }
-    return 0;
-}
-
-int found_node(st_node** blockchain, int value_nid) {
-    st_node* node = *blockchain;
-
-    while(node != NULL) {
-        if(node->nid == value_nid)
-            return 1;
-        node = node->next;
-    }
-    return 0;
-}
-
-int found_block(st_node** blockchain, int value_nid, char* value_bid) {
-    st_node* node = *blockchain;
-    while (node->nid != value_nid)
-        node = node->next;
-    st_block* block = node->first;
-    while (block != NULL) {
-        if (compare_string(block->bid, value_bid))
-            return 1;
-        block = block->next;
-    }
-    return 0;
-}
-
-int fill_node(st_node** blockchain, int value_nid) {
-    st_node* new_node = malloc(sizeof(st_node));
-    if(new_node == NULL)
-        return 1;
-    new_node->nid = value_nid;
-    new_node->first = NULL;
-    new_node->next = NULL;
-    if(*blockchain == NULL)
-        *blockchain = new_node;
-    else {
-        st_node* node = *blockchain;
-        while(node->next != NULL)
-            node = node->next;
-        node->next = new_node;
-    }
-    NODE++;
-    return 0;
-}
-
-int fill_block(st_node** blockchain, int value_nid, char* value_bid) {
-    st_block* new_block = malloc(sizeof(st_block));
-    if (new_block == NULL) {
-        return 1;
-    }
-    new_block->bid = malloc(sizeof(char) * (count_string(value_bid) + 1));
-    if (new_block->bid == NULL) {
-        free(new_block);
-        return 1;
-    }
-    fill_bid(value_bid, new_block->bid);
-    new_block->next = NULL;
-
-    st_node* node = *blockchain;
-    while(node->nid != value_nid)
-        node = node->next;
-    if (node->first == NULL) {
-        node->first = new_block;
-        return 0;
-    }
-    st_block* block = node->first;
-    while(block->next != NULL)
-        block = block->next;
-    block->next = new_block;
-    return 0;
-}
-
-void fill_bid(char* value_bid, char* bid) {
-    for (int i = 0; value_bid[i] != '\0'; i++)
-        bid[i] = value_bid[i];
-    bid[count_string(value_bid)] = '\0';
-}
-
-char check_sync(st_node* blockchain) {
-    st_node* reference = blockchain;
-
-    if (reference == NULL) {
-        return 's';
-    }
-
-    st_node* node = reference->next;
-    while (node != NULL) {
-        st_block* block1 = reference->first;
-        st_block* block2 = node->first;
-
-        while(block1 != NULL && block2 != NULL) {
-            if (!compare_string(block1->bid, block2->bid)) {
-                return '-';
-            }
-            block1 = block1->next;
-            block2 = block2->next;
-        }
-        if (block1 != NULL || block2 != NULL)
-            return '-';
-        node = node->next;
-    }
-    return 's';
-}
-
-
-/*en preparation*/
-int command_ls() {
-    if(command->size == 2 && compare_string(command->array[1], "-l") ) {
-
-    } else if (command->size == 1) {
-
-    }
-    return 6;
-}
-
-int command_sync() {
-
-    return 0;
-}
 
 /*
 FUNCTIONS
 */
 
-int read_command(char_string** command) {
-    char buffer[100];
-    int reading = read(0, buffer, 100);
-    if (reading == 0)
-        return -1;
-    if (reading < 0)
-        return 1;
-    if (buffer[reading - 1] == '\n')
-        buffer[reading - 1] = '\0';
-    if (my_split(buffer, " ", command))
-        return 1;
-    return 0;
-}
+
 
 int compare_string(char* string1, char* string2) {
     if(count_string(string1) != count_string(string2))
@@ -563,14 +168,6 @@ void int_to_char(int number, char* string) {
         j++;
     }
     string[size] = '\0';
-}
-
-void command_free(char_string* command) {
-    for (int i = 0; i< command->size; i++) {
-        free(command->array[i]);
-    }
-    free(command->array);
-    free(command);
 }
 
 int write_all(int fd, char* buffer, size_t size) {
